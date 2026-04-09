@@ -57,7 +57,7 @@ struct ContentView: View {
     private var detail: some View {
         Group {
             if let document = previewStore.currentDocument {
-                MarkdownWebView(html: document.html, baseURL: previewStore.baseURL)
+                MarkdownWebView(document: document, baseURL: previewStore.baseURL)
                     .background(Color(nsColor: .windowBackgroundColor))
             } else {
                 emptyState

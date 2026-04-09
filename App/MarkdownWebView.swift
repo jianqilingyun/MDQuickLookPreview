@@ -3,7 +3,7 @@ import SwiftUI
 import WebKit
 
 struct MarkdownWebView: NSViewRepresentable {
-    let html: String
+    let document: MarkdownPreviewDocument
     let baseURL: URL?
 
     func makeCoordinator() -> Coordinator {
@@ -18,24 +18,50 @@ struct MarkdownWebView: NSViewRepresentable {
         webView.navigationDelegate = context.coordinator
         webView.setValue(false, forKey: "drawsBackground")
         webView.allowsMagnification = true
-        webView.loadHTMLString(html, baseURL: baseURL)
-        context.coordinator.lastHTML = html
+        webView.loadHTMLString(document.html, baseURL: baseURL)
+        context.coordinator.lastTitle = document.title
+        context.coordinator.lastBodyHTML = document.bodyHTML
+        context.coordinator.lastShellSignature = document.shellSignature
         context.coordinator.lastBaseURL = baseURL
         return webView
     }
 
     func updateNSView(_ webView: WKWebView, context: Context) {
-        guard context.coordinator.lastHTML != html || context.coordinator.lastBaseURL != baseURL else {
+        let coordinator = context.coordinator
+        guard coordinator.lastTitle != document.title
+            || coordinator.lastBodyHTML != document.bodyHTML
+            || coordinator.lastShellSignature != document.shellSignature
+            || coordinator.lastBaseURL != baseURL else {
             return
         }
 
-        webView.loadHTMLString(html, baseURL: baseURL)
-        context.coordinator.lastHTML = html
-        context.coordinator.lastBaseURL = baseURL
+        guard coordinator.isPageReady,
+              coordinator.lastShellSignature == document.shellSignature,
+              coordinator.lastBaseURL == baseURL else {
+            coordinator.isPageReady = false
+            webView.loadHTMLString(document.html, baseURL: baseURL)
+            coordinator.lastTitle = document.title
+            coordinator.lastBodyHTML = document.bodyHTML
+            coordinator.lastShellSignature = document.shellSignature
+            coordinator.lastBaseURL = baseURL
+            return
+        }
+
+        let updateScript = """
+        window.updatePreview(\(document.title.javaScriptLiteral()), \(document.bodyHTML.javaScriptLiteral()));
+        """
+        webView.evaluateJavaScript(updateScript)
+        coordinator.lastTitle = document.title
+        coordinator.lastBodyHTML = document.bodyHTML
+        coordinator.lastShellSignature = document.shellSignature
+        coordinator.lastBaseURL = baseURL
     }
 
     final class Coordinator: NSObject, WKNavigationDelegate {
-        var lastHTML = ""
+        var isPageReady = false
+        var lastTitle = ""
+        var lastBodyHTML = ""
+        var lastShellSignature = ""
         var lastBaseURL: URL?
 
         func webView(
@@ -53,5 +79,20 @@ struct MarkdownWebView: NSViewRepresentable {
 
             decisionHandler(.allow)
         }
+
+        func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+            isPageReady = true
+        }
+    }
+}
+
+private extension String {
+    func javaScriptLiteral() -> String {
+        guard let data = try? JSONSerialization.data(withJSONObject: [self]),
+              let encoded = String(data: data, encoding: .utf8) else {
+            return "\"\""
+        }
+
+        return String(encoded.dropFirst().dropLast())
     }
 }

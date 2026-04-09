@@ -4,7 +4,9 @@ import UniformTypeIdentifiers
 
 struct MarkdownPreviewDocument {
     let title: String
+    let bodyHTML: String
     let html: String
+    let shellSignature: String
     let suggestedSize: CGSize
 
     static let supportedContentTypes: [UTType] = [
@@ -25,7 +27,9 @@ struct MarkdownPreviewDocument {
 
         return MarkdownPreviewDocument(
             title: title,
+            bodyHTML: bodyHTML,
             html: pageHTML,
+            shellSignature: settings.renderSignature,
             suggestedSize: CGSize(width: 920, height: 1180)
         )
     }
@@ -87,7 +91,14 @@ struct MarkdownPreviewDocument {
 }
 
 private enum HTMLDocumentBuilder {
+    private static let bodyPlaceholder = "<!-- MDQL_BODY -->"
+
     static func build(title: String, body: String, settings: PreviewSettings) -> String {
+        buildShell(title: title, settings: settings)
+            .replacingOccurrences(of: bodyPlaceholder, with: body)
+    }
+
+    private static func buildShell(title: String, settings: PreviewSettings) -> String {
         let themeVariables = settings.theme.cssVariables.map { key, value in
             "--\(key): \(value);"
         }.sorted().joined(separator: "\n              ")
@@ -253,10 +264,19 @@ private enum HTMLDocumentBuilder {
               stroke: var(--border);
             }
           </style>
+          <script>
+            window.updatePreview = function(nextTitle, nextBody) {
+              document.title = nextTitle;
+              const container = document.getElementById("preview-content");
+              if (container) {
+                container.innerHTML = nextBody;
+              }
+            };
+          </script>
         </head>
         <body>
-          <article>
-            \(body)
+          <article id="preview-content">
+            \(bodyPlaceholder)
           </article>
         </body>
         </html>

@@ -181,6 +181,15 @@ struct PreviewSettings: Codable, Equatable {
     var fontSize: FontSize
     var contentWidth: ContentWidth
 
+    var renderSignature: String {
+        [
+            language.rawValue,
+            theme.rawValue,
+            fontSize.rawValue,
+            contentWidth.rawValue
+        ].joined(separator: "|")
+    }
+
     private enum CodingKeys: String, CodingKey {
         case language
         case theme
