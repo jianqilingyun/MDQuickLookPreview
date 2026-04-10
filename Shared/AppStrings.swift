@@ -38,6 +38,13 @@ struct AppStrings {
         }
     }
 
+    var workspaceModeLabel: String {
+        switch language {
+        case .simplifiedChinese: return "默认视图"
+        case .english: return "Default View"
+        }
+    }
+
     var openMarkdown: String {
         switch language {
         case .simplifiedChinese: return "打开 Markdown"
@@ -49,6 +56,20 @@ struct AppStrings {
         switch language {
         case .simplifiedChinese: return "打开 Markdown..."
         case .english: return "Open Markdown..."
+        }
+    }
+
+    var save: String {
+        switch language {
+        case .simplifiedChinese: return "保存"
+        case .english: return "Save"
+        }
+    }
+
+    var saveMarkdown: String {
+        switch language {
+        case .simplifiedChinese: return "保存 Markdown"
+        case .english: return "Save Markdown"
         }
     }
 
@@ -70,6 +91,64 @@ struct AppStrings {
         switch language {
         case .simplifiedChinese: return "预览"
         case .english: return "Preview"
+        }
+    }
+
+    var editorTitle: String {
+        switch language {
+        case .simplifiedChinese: return "编辑"
+        case .english: return "Editor"
+        }
+    }
+
+    var previewTitle: String {
+        switch language {
+        case .simplifiedChinese: return "预览"
+        case .english: return "Preview"
+        }
+    }
+
+    var documentLabel: String {
+        switch language {
+        case .simplifiedChinese: return "当前文档"
+        case .english: return "Current File"
+        }
+    }
+
+    var unsavedChangesBadge: String {
+        switch language {
+        case .simplifiedChinese: return "未保存"
+        case .english: return "Unsaved"
+        }
+    }
+
+    var unsavedChangesTitle: String {
+        switch language {
+        case .simplifiedChinese: return "有未保存的修改"
+        case .english: return "You Have Unsaved Changes"
+        }
+    }
+
+    func unsavedChangesMessage(fileName: String) -> String {
+        switch language {
+        case .simplifiedChinese:
+            return "“\(fileName)” 还有未保存的修改。继续之前要先保存吗？"
+        case .english:
+            return "“\(fileName)” has unsaved changes. Do you want to save before continuing?"
+        }
+    }
+
+    var discardChanges: String {
+        switch language {
+        case .simplifiedChinese: return "不保存"
+        case .english: return "Discard"
+        }
+    }
+
+    var cancel: String {
+        switch language {
+        case .simplifiedChinese: return "取消"
+        case .english: return "Cancel"
         }
     }
 

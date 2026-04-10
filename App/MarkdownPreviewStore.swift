@@ -8,6 +8,7 @@ final class MarkdownPreviewStore: ObservableObject {
     static let shared = MarkdownPreviewStore()
 
     @Published private(set) var currentURL: URL?
+    @Published private(set) var currentMarkdown = ""
     @Published private(set) var currentDocument: MarkdownPreviewDocument?
     @Published private(set) var loadError: String?
     @Published private(set) var isMonitoring = false
@@ -16,13 +17,26 @@ final class MarkdownPreviewStore: ObservableObject {
     private var monitorSource: DispatchSourceFileSystemObject?
     private var restartMonitorTask: Task<Void, Never>?
     private var lastObservedStamp: FileStamp?
+    private var savedMarkdown = ""
 
     var hasOpenDocument: Bool {
         currentURL != nil
     }
 
+    var currentFileName: String? {
+        currentURL?.lastPathComponent
+    }
+
     var baseURL: URL? {
         currentURL?.deletingLastPathComponent()
+    }
+
+    var hasUnsavedChanges: Bool {
+        hasOpenDocument && currentMarkdown != savedMarkdown
+    }
+
+    var canSave: Bool {
+        hasUnsavedChanges
     }
 
     func open(_ url: URL) {
@@ -32,23 +46,83 @@ final class MarkdownPreviewStore: ObservableObject {
             return
         }
 
-        restartMonitorTask?.cancel()
-        currentURL = normalizedURL
-        reloadCurrentDocument()
-        startMonitoring(normalizedURL)
-    }
+        if normalizedURL == currentURL {
+            return
+        }
 
-    func reloadCurrentDocument() {
-        guard let url = currentURL else {
+        guard resolveUnsavedChangesIfNeeded() else {
             return
         }
 
         do {
-            currentDocument = try MarkdownPreviewDocument.load(from: url)
+            let markdown = try MarkdownPreviewDocument.loadMarkdown(from: normalizedURL)
+            restartMonitorTask?.cancel()
+            stopMonitoring()
+            currentURL = normalizedURL
+            currentMarkdown = markdown
+            savedMarkdown = markdown
+            try renderCurrentDocument()
             loadError = nil
-            lastObservedStamp = fileStamp(for: url)
+            lastObservedStamp = fileStamp(for: normalizedURL)
+            startMonitoring(normalizedURL)
         } catch {
             loadError = error.localizedDescription
+        }
+    }
+
+    func reloadCurrentDocument() {
+        guard hasOpenDocument else {
+            return
+        }
+
+        do {
+            try renderCurrentDocument()
+            loadError = nil
+        } catch {
+            loadError = error.localizedDescription
+        }
+    }
+
+    func updateCurrentMarkdown(_ markdown: String) {
+        guard hasOpenDocument else {
+            return
+        }
+
+        currentMarkdown = markdown
+        reloadCurrentDocument()
+
+        guard let url = currentURL else {
+            return
+        }
+
+        if hasUnsavedChanges {
+            stopMonitoring()
+        } else if !isMonitoring {
+            lastObservedStamp = fileStamp(for: url)
+            startMonitoring(url)
+        }
+    }
+
+    @discardableResult
+    func saveCurrentDocument() -> Bool {
+        guard let url = currentURL else {
+            return false
+        }
+
+        stopMonitoring()
+
+        do {
+            try Data(currentMarkdown.utf8).write(to: url, options: .atomic)
+            savedMarkdown = currentMarkdown
+            lastObservedStamp = fileStamp(for: url)
+            startMonitoring(url)
+            try renderCurrentDocument()
+            loadError = nil
+            return true
+        } catch {
+            loadError = error.localizedDescription
+            startMonitoring(url)
+            return false
         }
     }
 
@@ -69,6 +143,10 @@ final class MarkdownPreviewStore: ObservableObject {
         reloadCurrentDocument()
     }
 
+    func confirmTermination() -> Bool {
+        resolveUnsavedChangesIfNeeded()
+    }
+
     private func startMonitoring(_ url: URL) {
         stopMonitoring()
         lastObservedStamp = fileStamp(for: url)
@@ -80,18 +158,6 @@ final class MarkdownPreviewStore: ObservableObject {
         monitorSource = source
         isMonitoring = true
         source.resume()
-    }
-
-    private func reloadIfNeeded() {
-        guard let url = currentURL else {
-            stopMonitoring()
-            return
-        }
-
-        let latestStamp = fileStamp(for: url)
-        if latestStamp != lastObservedStamp {
-            reloadCurrentDocument()
-        }
     }
 
     private func stopMonitoring() {
@@ -111,7 +177,24 @@ final class MarkdownPreviewStore: ObservableObject {
     }
 
     private func handleMonitorEvent(for url: URL) {
-        reloadIfNeeded()
+        guard !hasUnsavedChanges else {
+            return
+        }
+
+        let latestStamp = fileStamp(for: url)
+        if latestStamp != lastObservedStamp {
+            do {
+                let markdown = try MarkdownPreviewDocument.loadMarkdown(from: url)
+                currentMarkdown = markdown
+                savedMarkdown = markdown
+                currentURL = url
+                try renderCurrentDocument()
+                loadError = nil
+                lastObservedStamp = latestStamp
+            } catch {
+                loadError = error.localizedDescription
+            }
+        }
 
         restartMonitorTask?.cancel()
         stopMonitoring()
@@ -121,8 +204,44 @@ final class MarkdownPreviewStore: ObservableObject {
                 return
             }
 
-            self.reloadIfNeeded()
             self.startMonitoring(url)
+        }
+    }
+
+    private func renderCurrentDocument() throws {
+        guard let url = currentURL else {
+            currentDocument = nil
+            return
+        }
+
+        currentDocument = try MarkdownPreviewDocument.make(
+            markdown: currentMarkdown,
+            fallbackTitle: url.deletingPathExtension().lastPathComponent,
+            settings: .load()
+        )
+    }
+
+    private func resolveUnsavedChangesIfNeeded() -> Bool {
+        guard hasUnsavedChanges else {
+            return true
+        }
+
+        let strings = AppStrings(language: PreviewSettings.load().language)
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = strings.unsavedChangesTitle
+        alert.informativeText = strings.unsavedChangesMessage(fileName: currentFileName ?? "Markdown")
+        alert.addButton(withTitle: strings.save)
+        alert.addButton(withTitle: strings.discardChanges)
+        alert.addButton(withTitle: strings.cancel)
+
+        switch alert.runModal() {
+        case .alertFirstButtonReturn:
+            return saveCurrentDocument()
+        case .alertSecondButtonReturn:
+            return true
+        default:
+            return false
         }
     }
 

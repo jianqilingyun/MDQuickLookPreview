@@ -17,11 +17,25 @@ struct MarkdownPreviewDocument {
     ]
 
     static func load(from url: URL) throws -> MarkdownPreviewDocument {
-        let settings = PreviewSettings.load()
+        try make(
+            markdown: loadMarkdown(from: url),
+            fallbackTitle: url.deletingPathExtension().lastPathComponent,
+            settings: .load()
+        )
+    }
+
+    static func loadMarkdown(from url: URL) throws -> String {
         let data = try Data(contentsOf: url, options: [.mappedIfSafe])
-        let markdown = try decodeString(from: data)
+        return try decodeString(from: data)
+    }
+
+    static func make(
+        markdown: String,
+        fallbackTitle: String,
+        settings: PreviewSettings
+    ) throws -> MarkdownPreviewDocument {
         let preparedMarkdown = truncateIfNeeded(markdown, language: settings.language)
-        let title = resolvedTitle(from: preparedMarkdown, fallback: url.deletingPathExtension().lastPathComponent)
+        let title = resolvedTitle(from: preparedMarkdown, fallback: fallbackTitle)
         let bodyHTML = MarkdownHTMLRenderer(settings: settings).render(preparedMarkdown)
         let pageHTML = HTMLDocumentBuilder.build(title: title, body: bodyHTML, settings: settings)
 

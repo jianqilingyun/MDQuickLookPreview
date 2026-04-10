@@ -35,6 +35,14 @@ struct MarkdownViewerCommands: Commands {
             .keyboardShortcut("o")
         }
 
+        CommandGroup(replacing: .saveItem) {
+            Button(strings.saveMarkdown) {
+                MarkdownPreviewStore.shared.saveCurrentDocument()
+            }
+            .keyboardShortcut("s")
+            .disabled(!previewStore.canSave)
+        }
+
         CommandMenu(strings.previewMenu) {
             Button(strings.reloadPreview) {
                 MarkdownPreviewStore.shared.reloadCurrentDocument()
@@ -45,15 +53,18 @@ struct MarkdownViewerCommands: Commands {
     }
 }
 
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func application(_ application: NSApplication, open urls: [URL]) {
         guard let url = urls.first else {
             return
         }
 
-        Task { @MainActor in
-            MarkdownPreviewStore.shared.open(url)
-        }
+        MarkdownPreviewStore.shared.open(url)
+    }
+
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        MarkdownPreviewStore.shared.confirmTermination() ? .terminateNow : .terminateCancel
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {

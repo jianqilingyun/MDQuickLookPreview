@@ -5,7 +5,8 @@ struct PreviewSettings: Codable, Equatable {
         language: .simplifiedChinese,
         theme: .warm,
         fontSize: .medium,
-        contentWidth: .comfortable
+        contentWidth: .comfortable,
+        workspaceMode: .preview
     )
 
     enum AppLanguage: String, CaseIterable, Codable, Identifiable {
@@ -176,10 +177,30 @@ struct PreviewSettings: Codable, Equatable {
         }
     }
 
+    enum WorkspaceMode: String, CaseIterable, Codable, Identifiable {
+        case edit
+        case preview
+        case split
+
+        var id: String { rawValue }
+
+        func displayName(in language: AppLanguage) -> String {
+            switch (self, language) {
+            case (.edit, .simplifiedChinese): return "编辑"
+            case (.preview, .simplifiedChinese): return "预览"
+            case (.split, .simplifiedChinese): return "分栏"
+            case (.edit, .english): return "Edit"
+            case (.preview, .english): return "Preview"
+            case (.split, .english): return "Split"
+            }
+        }
+    }
+
     var language: AppLanguage
     var theme: ThemePreset
     var fontSize: FontSize
     var contentWidth: ContentWidth
+    var workspaceMode: WorkspaceMode
 
     var renderSignature: String {
         [
@@ -195,13 +216,21 @@ struct PreviewSettings: Codable, Equatable {
         case theme
         case fontSize
         case contentWidth
+        case workspaceMode
     }
 
-    init(language: AppLanguage, theme: ThemePreset, fontSize: FontSize, contentWidth: ContentWidth) {
+    init(
+        language: AppLanguage,
+        theme: ThemePreset,
+        fontSize: FontSize,
+        contentWidth: ContentWidth,
+        workspaceMode: WorkspaceMode
+    ) {
         self.language = language
         self.theme = theme
         self.fontSize = fontSize
         self.contentWidth = contentWidth
+        self.workspaceMode = workspaceMode
     }
 
     init(from decoder: Decoder) throws {
@@ -210,6 +239,7 @@ struct PreviewSettings: Codable, Equatable {
         theme = try container.decodeIfPresent(ThemePreset.self, forKey: .theme) ?? .warm
         fontSize = try container.decodeIfPresent(FontSize.self, forKey: .fontSize) ?? .medium
         contentWidth = try container.decodeIfPresent(ContentWidth.self, forKey: .contentWidth) ?? .comfortable
+        workspaceMode = try container.decodeIfPresent(WorkspaceMode.self, forKey: .workspaceMode) ?? .preview
     }
 
     func encode(to encoder: Encoder) throws {
@@ -218,6 +248,7 @@ struct PreviewSettings: Codable, Equatable {
         try container.encode(theme, forKey: .theme)
         try container.encode(fontSize, forKey: .fontSize)
         try container.encode(contentWidth, forKey: .contentWidth)
+        try container.encode(workspaceMode, forKey: .workspaceMode)
     }
 
     static func load() -> PreviewSettings {

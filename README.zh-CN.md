@@ -2,20 +2,23 @@
 
 [English](./README.md) | [简体中文](./README.zh-CN.md)
 
-一个轻量的 macOS Markdown 预览应用。
+一个轻量的 macOS Markdown 预览与轻编辑应用。
 
-`MD Quick Look` 的目标很简单：快速查看排版后的 `.md` 文件，不用打开 VS Code 这类大型 IDE。
+`MD Quick Look` 的目标很简单：快速查看和轻量编辑排版后的 `.md` 文件，不用打开 VS Code 这类大型 IDE。
 
 当前产品形态是独立预览器 App，不再依赖 Finder 的空格 Quick Look 接管。
 
 ## 功能
 
 - 快速打开并预览 Markdown 文件
+- 可以直接在应用内编辑 Markdown
+- 支持 `Edit / Preview / Split` 三种工作模式
 - 支持标题、列表、引用、代码块、表格
 - 支持 Mermaid `graph TD` / `flowchart TD` 常用子集
 - 文件保存后自动刷新
+- 支持 `Command + S` 保存和未保存修改提示
 - 支持中英文界面切换
-- 支持主题、字号、版心宽度设置
+- 支持主题、字号、版心宽度和默认视图设置
 
 ## 使用方式
 
@@ -23,6 +26,18 @@
 - 在 Finder 中右键，选择“打开方式 > MD Quick Look”
 - 把 `.md` 文件拖进应用窗口
 - 在应用里用 `Open Markdown...` 打开文件
+- 可在工具栏或设置中切换 `Edit`、`Preview`、`Split`
+- 使用 `Command + S` 保存修改
+
+## 默认视图
+
+应用默认会以 `Preview` 模式打开文件。
+
+你也可以在 `设置 > 默认视图` 中改成：
+
+- `Preview`：默认直接看排版预览
+- `Edit`：默认直接进入编辑
+- `Split`：默认左右分栏同时显示编辑和预览
 
 ## 设为默认应用
 
@@ -97,3 +112,4 @@ dist/MD-Quick-Look-1.0.dmg
 - 列表只处理单层结构
 - 复杂嵌套 Markdown 语法没有做完整兼容
 - Mermaid 目前只覆盖常见流程图写法和基础节点形状
+- 编辑能力刻意保持轻量，不包含语法高亮或富文本工具栏

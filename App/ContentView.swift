@@ -22,9 +22,23 @@ struct ContentView: View {
                     previewStore.presentOpenPanel()
                 }
 
+                Button(strings.save) {
+                    previewStore.saveCurrentDocument()
+                }
+                .disabled(!previewStore.canSave)
+
                 Button(strings.reload) {
                     previewStore.reloadCurrentDocument()
                 }
+                .disabled(!previewStore.hasOpenDocument)
+
+                Picker("Workspace Mode", selection: workspaceModeBinding) {
+                    ForEach(PreviewSettings.WorkspaceMode.allCases) { mode in
+                        Text(mode.displayName(in: settingsStore.settings.language)).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .frame(width: 220)
                 .disabled(!previewStore.hasOpenDocument)
             }
         }
@@ -48,6 +62,9 @@ struct ContentView: View {
     private var sidebar: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
+                if previewStore.hasOpenDocument {
+                    filePanel
+                }
                 settingsPanel
             }
             .padding(24)
@@ -56,13 +73,51 @@ struct ContentView: View {
 
     private var detail: some View {
         Group {
-            if let document = previewStore.currentDocument {
-                MarkdownWebView(document: document, baseURL: previewStore.baseURL)
-                    .background(Color(nsColor: .windowBackgroundColor))
+            if previewStore.hasOpenDocument {
+                workspace
             } else {
                 emptyState
             }
         }
+    }
+
+    private var workspace: some View {
+        Group {
+            switch workspaceMode {
+            case .edit:
+                editorPane
+            case .preview:
+                previewPane
+            case .split:
+                HSplitView {
+                    editorPane
+                        .frame(minWidth: 320)
+                    previewPane
+                        .frame(minWidth: 360)
+                }
+            }
+        }
+        .background(Color(nsColor: .windowBackgroundColor))
+    }
+
+    private var filePanel: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(strings.documentLabel)
+                .font(.headline)
+
+            if let fileName = previewStore.currentFileName {
+                Text(fileName)
+                    .font(.subheadline.weight(.medium))
+                    .lineLimit(2)
+            }
+
+            if previewStore.hasUnsavedChanges {
+                Text(strings.unsavedChangesBadge)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Color.accentColor)
+            }
+        }
+        .panelStyle()
     }
 
     private var settingsPanel: some View {
@@ -116,8 +171,46 @@ struct ContentView: View {
                 .pickerStyle(.segmented)
                 .labelsHidden()
             }
+
+            settingRow(title: strings.workspaceModeLabel) {
+                Picker(strings.workspaceModeLabel, selection: workspaceModeBinding) {
+                    ForEach(PreviewSettings.WorkspaceMode.allCases) { mode in
+                        Text(mode.displayName(in: settingsStore.settings.language)).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+            }
         }
         .panelStyle()
+    }
+
+    private var editorPane: some View {
+        VStack(spacing: 0) {
+            paneHeader(title: strings.editorTitle, badge: previewStore.hasUnsavedChanges ? strings.unsavedChangesBadge : nil)
+
+            TextEditor(text: editorBinding)
+                .font(.system(size: 14, weight: .regular, design: .monospaced))
+                .scrollContentBackground(.hidden)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .background(Color(nsColor: .textBackgroundColor))
+        }
+    }
+
+    private var previewPane: some View {
+        VStack(spacing: 0) {
+            paneHeader(title: strings.previewTitle, badge: nil)
+
+            Group {
+                if let document = previewStore.currentDocument {
+                    MarkdownWebView(document: document, baseURL: previewStore.baseURL)
+                        .background(Color(nsColor: .windowBackgroundColor))
+                } else {
+                    Color(nsColor: .windowBackgroundColor)
+                }
+            }
+        }
     }
 
     private var emptyState: some View {
@@ -169,6 +262,25 @@ struct ContentView: View {
         }
     }
 
+    @ViewBuilder
+    private func paneHeader(title: String, badge: String?) -> some View {
+        HStack(spacing: 8) {
+            Text(title)
+                .font(.subheadline.weight(.semibold))
+
+            if let badge {
+                Text(badge)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Color.accentColor)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(Color(nsColor: .controlBackgroundColor))
+    }
+
     private var themeBinding: Binding<PreviewSettings.ThemePreset> {
         Binding(
             get: { settingsStore.settings.theme },
@@ -194,6 +306,24 @@ struct ContentView: View {
         Binding(
             get: { settingsStore.settings.contentWidth },
             set: { settingsStore.updateContentWidth($0) }
+        )
+    }
+
+    private var editorBinding: Binding<String> {
+        Binding(
+            get: { previewStore.currentMarkdown },
+            set: { previewStore.updateCurrentMarkdown($0) }
+        )
+    }
+
+    private var workspaceMode: PreviewSettings.WorkspaceMode {
+        settingsStore.settings.workspaceMode
+    }
+
+    private var workspaceModeBinding: Binding<PreviewSettings.WorkspaceMode> {
+        Binding(
+            get: { settingsStore.settings.workspaceMode },
+            set: { settingsStore.updateWorkspaceMode($0) }
         )
     }
 }
@@ -237,10 +367,18 @@ final class PreviewSettingsStore: ObservableObject {
         apply(updated)
     }
 
-    private func apply(_ updated: PreviewSettings) {
+    func updateWorkspaceMode(_ workspaceMode: PreviewSettings.WorkspaceMode) {
+        var updated = settings
+        updated.workspaceMode = workspaceMode
+        apply(updated, refreshPreview: false)
+    }
+
+    private func apply(_ updated: PreviewSettings, refreshPreview: Bool = true) {
         updated.save()
         settings = updated
-        MarkdownPreviewStore.shared.refreshForSettingsChange()
+        if refreshPreview {
+            MarkdownPreviewStore.shared.refreshForSettingsChange()
+        }
     }
 }
 
