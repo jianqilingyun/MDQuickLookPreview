@@ -101,46 +101,28 @@ final class MarkdownPreviewStore: ObservableObject {
     }
 
     private func makeMonitorSource(for url: URL) -> DispatchSourceFileSystemObject? {
-        let fileDescriptor = Darwin.open(url.path, O_EVTONLY)
-        guard fileDescriptor >= 0 else {
-            return nil
-        }
-
-        let source = DispatchSource.makeFileSystemObjectSource(
-            fileDescriptor: fileDescriptor,
-            eventMask: [.write, .extend, .attrib, .rename, .delete, .revoke],
-            queue: monitorQueue
-        )
-
-        source.setEventHandler { [weak self] in
-            let event = source.data
+        let eventHandler: @Sendable () -> Void = { [weak self] in
             Task { @MainActor [weak self] in
-                self?.handleMonitorEvent(event, for: url)
+                self?.handleMonitorEvent(for: url)
             }
         }
 
-        source.setCancelHandler {
-            Darwin.close(fileDescriptor)
-        }
-
-        return source
+        return makeFileMonitorSource(for: url, queue: monitorQueue, handler: eventHandler)
     }
 
-    private func handleMonitorEvent(_ event: DispatchSource.FileSystemEvent, for url: URL) {
+    private func handleMonitorEvent(for url: URL) {
         reloadIfNeeded()
 
-        if !event.intersection([.rename, .delete, .revoke]).isEmpty {
-            restartMonitorTask?.cancel()
-            stopMonitoring()
-            restartMonitorTask = Task { @MainActor [weak self] in
-                try? await Task.sleep(for: .milliseconds(250))
-                guard let self, self.currentURL == url else {
-                    return
-                }
-
-                self.reloadIfNeeded()
-                self.startMonitoring(url)
+        restartMonitorTask?.cancel()
+        stopMonitoring()
+        restartMonitorTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(250))
+            guard let self, self.currentURL == url else {
+                return
             }
+
+            self.reloadIfNeeded()
+            self.startMonitoring(url)
         }
     }
 
@@ -159,4 +141,28 @@ final class MarkdownPreviewStore: ObservableObject {
 private struct FileStamp: Equatable {
     let modificationDate: Date?
     let fileSize: Int?
+}
+
+private func makeFileMonitorSource(
+    for url: URL,
+    queue: DispatchQueue,
+    handler: @escaping @Sendable () -> Void
+) -> DispatchSourceFileSystemObject? {
+    let fileDescriptor = Darwin.open(url.path, O_EVTONLY)
+    guard fileDescriptor >= 0 else {
+        return nil
+    }
+
+    let source = DispatchSource.makeFileSystemObjectSource(
+        fileDescriptor: fileDescriptor,
+        eventMask: [.write, .extend, .attrib, .rename, .delete, .revoke],
+        queue: queue
+    )
+
+    source.setEventHandler(handler: handler)
+    source.setCancelHandler {
+        Darwin.close(fileDescriptor)
+    }
+
+    return source
 }
